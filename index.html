@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Festive Christmas Quiz & Game Show</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for Sound Effects without external audio assets -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- TensorFlow.js & Face Detection Bundles -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.10.0/dist/tf-core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.10.0/dist/tf-backend-webgl.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.2/dist/face-detection.min.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at center, #1a472a 0%, #0d2b18 60%, #05140b 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .font-festive {
+            font-family: 'Mountains of Christmas', cursive;
+        }
+
+        .gold-glow {
+            box-shadow: 0 0 25px rgba(234, 179, 8, 0.4);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0d2b18;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #16a34a;
+            border-radius: 4px;
+        }
+
+        #snow-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="relative flex flex-col min-h-screen">
+    <!-- Snow Canvas Background -->
+    <canvas id="snow-canvas"></canvas>
+
+    <!-- Header Navigation & View Switcher -->
+    <header class="relative z-20 bg-emerald-950/80 backdrop-blur-md border-b border-emerald-800/50 px-4 py-3 sticky top-0">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            <!-- App Title -->
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🎄</span>
+                <div>
+                    <h1 class="font-festive text-2xl sm:text-3xl text-amber-300 tracking-wider font-bold drop-shadow">
+                        The Big Christmas Live Quiz
+                    </h1>
+                    <p class="text-xs text-emerald-300">Live Video & Smart Hat Tracker</p>
+                </div>
+            </div>
+
+            <!-- View Selector & Manual Adjust Toggle -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="toggleHatAdjusters()" class="px-3 py-1.5 bg-emerald-900/90 hover:bg-emerald-800 rounded-lg text-xs font-semibold text-amber-300 border border-amber-500/40 flex items-center gap-1.5 shadow">
+                    <i data-lucide="sliders" class="w-4 h-4"></i> Adjust Hat Fit
+                </button>
+
+                <div class="flex items-center gap-2 bg-emerald-900/80 p-1.5 rounded-xl border border-emerald-700/60 shadow-inner">
+                    <button id="btn-view-host" onclick="switchView('host')" 
+                            class="px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 bg-amber-500 text-slate-950 shadow-md">
+                        <i data-lucide="tv"></i>
+                        <span>Big Screen (Host)</span>
+                    </button>
+                    <button id="btn-view-c1" onclick="switchView('c1')" 
+                            class="px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 text-emerald-200 hover:text-white hover:bg-emerald-800/60">
+                        <i data-lucide="user"></i>
+                        <span>Team Elf</span>
+                    </button>
+                    <button id="btn-view-c2" onclick="switchView('c2')" 
+                            class="px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 text-emerald-200 hover:text-white hover:bg-emerald-800/60">
+                        <i data-lucide="user-check"></i>
+                        <span>Team Santa</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Manual Hat Adjustment Controls Panel (Collapsible) -->
+    <div id="hat-adjust-panel" class="hidden relative z-30 bg-slate-900/95 border-b-2 border-amber-500 p-4 backdrop-blur shadow-2xl">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <i data-lucide="sparkles" class="text-amber-400 w-5 h-5"></i>
+                <span class="text-sm font-bold text-amber-300">Manual Hat Controls:</span>
+                <span class="text-xs text-slate-400">(Fine tune hat size & position if camera moves)</span>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full md:w-auto">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-emerald-300 font-semibold w-16">Vertical Y:</label>
+                    <input type="range" id="slider-hat-y" min="-80" max="80" value="0" oninput="updateHatOffsets()" class="w-full accent-amber-400">
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-emerald-300 font-semibold w-16">Horizontal X:</label>
+                    <input type="range" id="slider-hat-x" min="-60" max="60" value="0" oninput="updateHatOffsets()" class="w-full accent-amber-400">
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-emerald-300 font-semibold w-16">Hat Size:</label>
+                    <input type="range" id="slider-hat-size" min="0.5" max="2.0" step="0.1" value="1.0" oninput="updateHatOffsets()" class="w-full accent-amber-400">
+                </div>
+            </div>
+            
+            <button onclick="resetHatOffsets()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-semibold border border-slate-600">
+                Reset
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="relative z-20 flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 flex flex-col">
+
+        <!-- ================= VIEW 1: BIG SCREEN / HOST DASHBOARD ================= -->
+        <div id="view-host" class="flex-1 flex flex-col gap-6">
+            
+            <!-- Video Grid with Hat Overlay & Live Answers -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Contestant 1 Card -->
+                <div id="card-c1-host" class="bg-slate-900/80 rounded-2xl p-4 border-2 border-emerald-600/60 relative overflow-hidden flex flex-col shadow-xl transition-all">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">🧝</span>
+                            <h2 class="text-lg font-bold text-emerald-400">Team Elf (Player 1)</h2>
+                        </div>
+                        <div class="bg-emerald-950 px-3 py-1 rounded-full border border-emerald-500/40 text-emerald-300 font-bold text-xl">
+                            Score: <span id="score-c1-display">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Video Container with Live Hat Tracker Canvas -->
+                    <div class="relative aspect-video rounded-xl overflow-hidden bg-black/80 border border-emerald-800 flex items-center justify-center">
+                        <video id="video-c1" autoplay playsinline muted class="hidden"></video>
+                        <canvas id="canvas-c1-host" class="w-full h-full object-cover"></canvas>
+                        
+                        <div class="absolute top-3 left-3 bg-slate-900/80 backdrop-blur px-2.5 py-1 rounded-md text-xs flex items-center gap-1.5 text-emerald-300 border border-emerald-700/50">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Live Hat Tracker
+                        </div>
+                    </div>
+
+                    <!-- Live Submitted Answer Box -->
+                    <div class="mt-4 p-3 bg-emerald-950/90 rounded-xl border border-emerald-700/60">
+                        <div class="flex justify-between items-center text-xs text-emerald-300 font-semibold mb-1">
+                            <span>SUBMITTED ANSWER:</span>
+                            <span id="status-badge-c1" class="text-amber-400">Waiting...</span>
+                        </div>
+                        <div id="answer-c1-display" class="font-bold text-xl text-white tracking-wide min-h-[32px] flex items-center">
+                            ???
+                        </div>
+                    </div>
+
+                    <!-- Host Controls -->
+                    <div class="mt-3 flex gap-2">
+                        <button onclick="revealAnswer('c1')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition">Reveal</button>
+                        <button onclick="adjustScore('c1', 100)" class="flex-1 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded-lg text-xs font-bold text-white transition">+100 pts</button>
+                        <button onclick="adjustScore('c1', -50)" class="py-1.5 px-3 bg-red-900/60 hover:bg-red-800 rounded-lg text-xs font-bold text-red-200 transition">-50 pts</button>
+                    </div>
+                </div>
+
+                <!-- Contestant 2 Card -->
+                <div id="card-c2-host" class="bg-slate-900/80 rounded-2xl p-4 border-2 border-red-600/60 relative overflow-hidden flex flex-col shadow-xl transition-all">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">🎅</span>
+                            <h2 class="text-lg font-bold text-red-400">Team Santa (Player 2)</h2>
+                        </div>
+                        <div class="bg-red-950 px-3 py-1 rounded-full border border-red-500/40 text-red-300 font-bold text-xl">
+                            Score: <span id="score-c2-display">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Video Container with Live Hat Tracker Canvas -->
+                    <div class="relative aspect-video rounded-xl overflow-hidden bg-black/80 border border-red-800 flex items-center justify-center">
+                        <video id="video-c2" autoplay playsinline muted class="hidden"></video>
+                        <canvas id="canvas-c2-host" class="w-full h-full object-cover"></canvas>
+                        
+                        <div class="absolute top-3 left-3 bg-slate-900/80 backdrop-blur px-2.5 py-1 rounded-md text-xs flex items-center gap-1.5 text-red-300 border border-red-700/50">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i> Live Hat Tracker
+                        </div>
+                    </div>
+
+                    <!-- Live Submitted Answer Box -->
+                    <div class="mt-4 p-3 bg-red-950/90 rounded-xl border border-red-700/60">
+                        <div class="flex justify-between items-center text-xs text-red-300 font-semibold mb-1">
+                            <span>SUBMITTED ANSWER:</span>
+                            <span id="status-badge-c2" class="text-amber-400">Waiting...</span>
+                        </div>
+                        <div id="answer-c2-display" class="font-bold text-xl text-white tracking-wide min-h-[32px] flex items-center">
+                            ???
+                        </div>
+                    </div>
+
+                    <!-- Host Controls -->
+                    <div class="mt-3 flex gap-2">
+                        <button onclick="revealAnswer('c2')" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition">Reveal</button>
+                        <button onclick="adjustScore('c2', 100)" class="flex-1 py-1.5 bg-red-700 hover:bg-red-600 rounded-lg text-xs font-bold text-white transition">+100 pts</button>
+                        <button onclick="adjustScore('c2', -50)" class="py-1.5 px-3 bg-red-900/60 hover:bg-red-800 rounded-lg text-xs font-bold text-red-200 transition">-50 pts</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Quiz Screen Centerpiece -->
+            <div class="bg-gradient-to-b from-slate-900/95 to-emerald-950/90 rounded-2xl p-6 border-2 border-amber-500/50 shadow-2xl relative">
+                
+                <div class="flex flex-wrap justify-between items-center border-b border-emerald-800/80 pb-4 mb-5 gap-3">
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold uppercase tracking-widest">
+                            Question <span id="current-q-index">1</span> of <span id="total-q-index">8</span>
+                        </span>
+                        <span id="category-badge" class="px-3 py-1 bg-emerald-800/50 text-emerald-200 border border-emerald-600/40 rounded-lg text-xs font-medium">
+                            Christmas Movies
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="timer" class="text-amber-400 w-5 h-5"></i>
+                            <span id="timer-display" class="font-mono text-2xl font-bold text-amber-300">20</span>s
+                        </div>
+                        <button onclick="toggleAudio()" id="btn-sound" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 border border-slate-700" title="Toggle Sound">
+                            <i data-lucide="volume-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="min-h-[100px] flex items-center justify-center text-center px-4 mb-6">
+                    <h2 id="question-text" class="font-festive text-3xl md:text-4xl text-white tracking-wide leading-relaxed drop-shadow-md">
+                        Loading Christmas Trivia Question...
+                    </h2>
+                </div>
+
+                <!-- Revealed Correct Answer Area -->
+                <div id="correct-answer-banner" class="hidden p-4 mb-6 bg-amber-500/20 border-2 border-amber-400 rounded-xl text-center">
+                    <span class="text-xs font-bold uppercase tracking-widest text-amber-300">Official Correct Answer:</span>
+                    <div id="correct-answer-text" class="text-2xl font-bold text-white mt-1">---</div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between pt-4 border-t border-emerald-800/80 gap-3">
+                    <button onclick="revealCorrectAnswer()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-xl text-xs font-bold text-slate-950 transition flex items-center gap-1.5 shadow">
+                        <i data-lucide="eye" class="w-4 h-4"></i> Reveal Answer Key
+                    </button>
+                    <button onclick="nextQuestion()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold text-white transition flex items-center gap-1.5 shadow-lg gold-glow">
+                        Next Question <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- ================= VIEW 2: CONTESTANT 1 (TEAM ELF) ================= -->
+        <div id="view-c1" class="hidden flex-1 flex flex-col gap-6 max-w-4xl mx-auto w-full">
+            <div class="bg-slate-900/90 rounded-2xl p-6 border-2 border-emerald-500 shadow-2xl flex flex-col gap-6">
+                
+                <div class="flex justify-between items-center border-b border-emerald-800 pb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-4xl">🧝</span>
+                        <div>
+                            <h2 class="text-2xl font-bold text-emerald-400">Team Elf Dashboard</h2>
+                            <p class="text-xs text-slate-400">Type your answer below and hit Submit!</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-slate-400 uppercase tracking-widest font-semibold">Your Score</div>
+                        <div id="c1-my-score" class="text-3xl font-bold text-amber-300">0</div>
+                    </div>
+                </div>
+
+                <!-- Self Video Preview with Hat -->
+                <div class="relative aspect-video max-w-md mx-auto w-full rounded-xl overflow-hidden bg-black border-2 border-emerald-600 shadow-inner">
+                    <canvas id="canvas-c1-self" class="w-full h-full object-cover"></canvas>
+                </div>
+
+                <!-- Text Answer Input Box -->
+                <div class="flex flex-col gap-3 max-w-md mx-auto w-full">
+                    <label class="text-sm font-semibold text-emerald-300">Your Answer:</label>
+                    <div class="flex gap-2">
+                        <input id="input-c1" type="text" placeholder="Type answer here..." 
+                               class="flex-1 px-4 py-3 bg-slate-950 border-2 border-emerald-600 rounded-xl text-white font-bold placeholder-slate-500 focus:outline-none focus:border-amber-400">
+                        <button onclick="submitAnswer('c1')" 
+                                class="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition">
+                            Submit
+                        </button>
+                    </div>
+                    <p id="feedback-c1" class="text-xs text-emerald-400 font-semibold text-center h-4"></p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ================= VIEW 3: CONTESTANT 2 (TEAM SANTA) ================= -->
+        <div id="view-c2" class="hidden flex-1 flex flex-col gap-6 max-w-4xl mx-auto w-full">
+            <div class="bg-slate-900/90 rounded-2xl p-6 border-2 border-red-500 shadow-2xl flex flex-col gap-6">
+                
+                <div class="flex justify-between items-center border-b border-red-800 pb-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-4xl">🎅</span>
+                        <div>
+                            <h2 class="text-2xl font-bold text-red-400">Team Santa Dashboard</h2>
+                            <p class="text-xs text-slate-400">Type your answer below and hit Submit!</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xs text-slate-400 uppercase tracking-widest font-semibold">Your Score</div>
+                        <div id="c2-my-score" class="text-3xl font-bold text-amber-300">0</div>
+                    </div>
+                </div>
+
+                <!-- Self Video Preview with Hat -->
+                <div class="relative aspect-video max-w-md mx-auto w-full rounded-xl overflow-hidden bg-black border-2 border-red-600 shadow-inner">
+                    <canvas id="canvas-c2-self" class="w-full h-full object-cover"></canvas>
+                </div>
+
+                <!-- Text Answer Input Box -->
+                <div class="flex flex-col gap-3 max-w-md mx-auto w-full">
+                    <label class="text-sm font-semibold text-red-300">Your Answer:</label>
+                    <div class="flex gap-2">
+                        <input id="input-c2" type="text" placeholder="Type answer here..." 
+                               class="flex-1 px-4 py-3 bg-slate-950 border-2 border-red-600 rounded-xl text-white font-bold placeholder-slate-500 focus:outline-none focus:border-amber-400">
+                        <button onclick="submitAnswer('c2')" 
+                                class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition">
+                            Submit
+                        </button>
+                    </div>
+                    <p id="feedback-c2" class="text-xs text-red-400 font-semibold text-center h-4"></p>
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="relative z-20 bg-emerald-950/90 border-t border-emerald-800/60 py-3 text-center text-xs text-emerald-400/80">
+        🎄 Powered by WebRTC & Web Audio API • Created for Festive Family Game Nights
+    </footer>
+
+    <!-- App JavaScript Logic -->
+    <script>
+        // ================= QUIZ DATABASE =================
+        const QUIZ_QUESTIONS = [
+            { category: "Christmas Movies", question: "In 'Elf', what is the first rule of the Code of Elves?", answer: "Treat every day like Christmas" },
+            { category: "Holiday Songs", question: "What gift is given on the 5th day of Christmas?", answer: "5 Golden Rings" },
+            { category: "Christmas Traditions", question: "Which country started the tradition of putting up a Christmas tree?", answer: "Germany" },
+            { category: "Santa Lore", question: "Name Santa's reindeer whose name starts with 'B'?", answer: "Blitzen" },
+            { category: "Christmas Foods", question: "What festive sweet treat resembles a shepherd's staff?", answer: "Candy Cane" },
+            { category: "Holiday Movies", question: "What is the name of the green character who stole Christmas?", answer: "The Grinch" },
+            { category: "Christmas Around the World", question: "In Japan, what fast food is traditionally eaten on Christmas?", answer: "KFC" },
+            { category: "Christmas Trivia", question: "Which popular holiday song was originally written for Thanksgiving?", answer: "Jingle Bells" }
+        ];
+
+        // ================= APP STATE =================
+        let state = {
+            currentView: 'host',
+            currentQ: 0,
+            scores: { c1: 0, c2: 0 },
+            answers: { c1: '', c2: '' },
+            revealed: { c1: false, c2: false },
+            timer: 20,
+            timerInterval: null,
+            soundEnabled: true,
+            stream: null,
+            detector: null,
+            // Fine-tune offsets
+            userHatOffset: { x: 0, y: 0, scaleMult: 1.0 },
+            // Tracked Head Positions (x, y, scale, angle)
+            facePos: {
+                c1: { x: 200, y: 70, scale: 1.0, angle: 0, targetX: 200, targetY: 70, targetScale: 1.0, targetAngle: 0 },
+                c2: { x: 200, y: 70, scale: 1.0, angle: 0, targetX: 200, targetY: 70, targetScale: 1.0, targetAngle: 0 }
+            }
+        };
+
+        const soundFx = {
+            submit: () => {
+                if (!state.soundEnabled) return;
+                try {
+                    const synth = new Tone.Synth().toDestination();
+                    synth.triggerAttackRelease("E5", "0.2");
+                } catch(e) {}
+            },
+            reveal: () => {
+                if (!state.soundEnabled) return;
+                try {
+                    const synth = new Tone.PolySynth().toDestination();
+                    synth.triggerAttackRelease(["C5", "G5"], "0.3");
+                } catch(e) {}
+            }
+        };
+
+        window.onload = () => {
+            lucide.createIcons();
+            initSnowfall();
+            initCameras();
+            loadQuestion(0);
+        };
+
+        function switchView(viewName) {
+            state.currentView = viewName;
+            ['host', 'c1', 'c2'].forEach(v => {
+                document.getElementById(`view-${v}`).classList.add('hidden');
+                document.getElementById(`btn-view-${v}`).className = "px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 text-emerald-200 hover:text-white hover:bg-emerald-800/60";
+            });
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            document.getElementById(`btn-view-${viewName}`).className = "px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 bg-amber-500 text-slate-950 shadow-md";
+        }
+
+        function toggleHatAdjusters() {
+            const panel = document.getElementById('hat-adjust-panel');
+            panel.classList.toggle('hidden');
+        }
+
+        function updateHatOffsets() {
+            state.userHatOffset.x = parseFloat(document.getElementById('slider-hat-x').value);
+            state.userHatOffset.y = parseFloat(document.getElementById('slider-hat-y').value);
+            state.userHatOffset.scaleMult = parseFloat(document.getElementById('slider-hat-size').value);
+        }
+
+        function resetHatOffsets() {
+            document.getElementById('slider-hat-x').value = 0;
+            document.getElementById('slider-hat-y').value = 0;
+            document.getElementById('slider-hat-size').value = 1.0;
+            updateHatOffsets();
+        }
+
+        // ================= WEBCAM & ACCURATE FACE TRACKER LOGIC =================
+        async function initCameras() {
+            try {
+                state.stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: { ideal: 640 }, height: { ideal: 360 }, facingMode: "user" }, 
+                    audio: false 
+                });
+                const v1 = document.getElementById('video-c1');
+                const v2 = document.getElementById('video-c2');
+                v1.srcObject = state.stream;
+                v2.srcObject = state.stream;
+            } catch (err) {
+                console.log("Webcam access unavailable, using default fallback hat position.");
+            }
+
+            // Initialize TensorFlow Face Detector
+            try {
+                if (window.faceDetection) {
+                    const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
+                    const detectorConfig = { runtime: 'tfjs', modelType: 'short', maxFaces: 1 };
+                    state.detector = await faceDetection.createDetector(model, detectorConfig);
+                    startFaceDetectionLoop();
+                }
+            } catch (e) {
+                console.log("Face detector initialized with standard tracking fallback:", e);
+            }
+
+            startHatRenderLoop();
+        }
+
+        async function startFaceDetectionLoop() {
+            const v1 = document.getElementById('video-c1');
+            if (state.detector && v1 && v1.readyState >= 2) {
+                try {
+                    const faces = await state.detector.estimateFaces(v1);
+                    if (faces && faces.length > 0) {
+                        const box = faces[0].box;
+                        const vWidth = v1.videoWidth || 640;
+                        const vHeight = v1.videoHeight || 360;
+
+                        // Canvas dimensions are 400x225
+                        const targetCanvasW = 400;
+                        const targetCanvasH = 225;
+
+                        // Calculate face center X, top head Y
+                        const rawCenterX = box.xMin + (box.width / 2);
+                        const rawTopY = box.yMin;
+
+                        // Account for video mirroring (1 - ratio) for natural left-right movement matching canvas mirror
+                        const mirroredXRatio = 1 - (rawCenterX / vWidth);
+                        const topYRatio = rawTopY / vHeight;
+
+                        const mappedX = mirroredXRatio * targetCanvasW;
+                        const mappedY = topYRatio * targetCanvasH;
+                        const widthRatio = (box.width / vWidth) * 2.6; 
+
+                        // Extract head tilt angle if eyes keypoints are available
+                        let tilt = 0;
+                        if (faces[0].keypoints) {
+                            const rightEye = faces[0].keypoints.find(k => k.name === 'rightEye');
+                            const leftEye = faces[0].keypoints.find(k => k.name === 'leftEye');
+                            if (rightEye && leftEye) {
+                                // Mirror dx calculation
+                                const dy = rightEye.y - leftEye.y;
+                                const dx = leftEye.x - rightEye.x;
+                                tilt = Math.atan2(dy, dx);
+                            }
+                        }
+
+                        ['c1', 'c2'].forEach(p => {
+                            state.facePos[p].targetX = mappedX;
+                            state.facePos[p].targetY = mappedY;
+                            state.facePos[p].targetScale = Math.min(Math.max(widthRatio, 0.6), 1.8);
+                            state.facePos[p].targetAngle = tilt;
+                        });
+                    }
+                } catch (e) {
+                    console.error("Face detection loop error:", e);
+                }
+            }
+            setTimeout(startFaceDetectionLoop, 60); // Stable tracking loop
+        }
+
+        function startHatRenderLoop() {
+            function renderFrame() {
+                // Smooth Interpolation (LERP) for natural hat tracking
+                ['c1', 'c2'].forEach(p => {
+                    const fp = state.facePos[p];
+                    fp.x += (fp.targetX - fp.x) * 0.2;
+                    fp.y += (fp.targetY - fp.y) * 0.2;
+                    fp.scale += (fp.targetScale - fp.scale) * 0.2;
+                    fp.angle += (fp.targetAngle - fp.angle) * 0.2;
+                });
+
+                drawPlayerFrame('c1', 'elf');
+                drawPlayerFrame('c2', 'santa');
+                requestAnimationFrame(renderFrame);
+            }
+            renderFrame();
+        }
+
+        function drawPlayerFrame(player, hatType) {
+            const hostCanvas = document.getElementById(`canvas-${player}-host`);
+            const selfCanvas = document.getElementById(`canvas-${player}-self`);
+            const video = document.getElementById(`video-${player}`);
+            const fp = state.facePos[player];
+
+            [hostCanvas, selfCanvas].forEach(canvas => {
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                canvas.width = 400;
+                canvas.height = 225;
+
+                ctx.save();
+
+                // Draw Mirrored Webcam Video Feed
+                if (state.stream && video && video.readyState >= 2) {
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+                } else {
+                    ctx.restore();
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    // Silhouetted fallback player graphics
+                    ctx.fillStyle = '#334155';
+                    ctx.beginPath();
+                    ctx.arc(200, 140, 45, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // Render Hat Directly Above Tracked Head Coordinates
+                ctx.save();
+                
+                const renderX = fp.x + state.userHatOffset.x;
+                const renderY = fp.y + state.userHatOffset.y;
+                const finalScale = fp.scale * state.userHatOffset.scaleMult;
+
+                ctx.translate(renderX, renderY);
+                ctx.rotate(fp.angle);
+                ctx.scale(finalScale, finalScale);
+
+                if (hatType === 'santa') {
+                    // Santa Hat
+                    ctx.fillStyle = '#dc2626';
+                    ctx.beginPath();
+                    ctx.moveTo(-45, 5);
+                    ctx.quadraticCurveTo(0, -65, 35, -10);
+                    ctx.lineTo(45, 5);
+                    ctx.fill();
+
+                    // White Fluffy Trim & Pom-Pom
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-50, -5, 100, 15);
+                    ctx.beginPath();
+                    ctx.arc(40, -10, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Elf Hat
+                    ctx.fillStyle = '#16a34a';
+                    ctx.beginPath();
+                    ctx.moveTo(-40, 5);
+                    ctx.lineTo(15, -60);
+                    ctx.lineTo(40, 5);
+                    ctx.fill();
+
+                    // Red Trim & Golden Bell
+                    ctx.fillStyle = '#dc2626';
+                    ctx.fillRect(-45, -5, 90, 15);
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.beginPath();
+                    ctx.arc(15, -60, 9, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            });
+        }
+
+        // ================= ANSWER SUBMISSION & REVEAL SYSTEM =================
+        function submitAnswer(player) {
+            const input = document.getElementById(`input-${player}`);
+            const text = input.value.trim();
+            if (!text) return;
+
+            state.answers[player] = text;
+            state.revealed[player] = false;
+
+            document.getElementById(`status-badge-${player}`).innerText = "SUBMITTED!";
+            document.getElementById(`status-badge-${player}`).className = "text-emerald-400 font-bold";
+            document.getElementById(`answer-${player}-display`).innerText = "🔒 Hidden (Click Reveal)";
+
+            document.getElementById(`feedback-${player}`).innerText = "✅ Answer submitted to Big Screen!";
+            soundFx.submit();
+        }
+
+        function revealAnswer(player) {
+            state.revealed[player] = true;
+            const ans = state.answers[player] || "No Answer";
+            document.getElementById(`answer-${player}-display`).innerText = ans;
+            document.getElementById(`status-badge-${player}`).innerText = "REVEALED";
+            document.getElementById(`status-badge-${player}`).className = "text-amber-300 font-bold";
+            soundFx.reveal();
+        }
+
+        function revealCorrectAnswer() {
+            document.getElementById('correct-answer-banner').classList.remove('hidden');
+            document.getElementById('correct-answer-text').innerText = QUIZ_QUESTIONS[state.currentQ].answer;
+            soundFx.reveal();
+        }
+
+        function loadQuestion(index) {
+            state.currentQ = index;
+            const q = QUIZ_QUESTIONS[index];
+
+            document.getElementById('current-q-index').innerText = index + 1;
+            document.getElementById('total-q-index').innerText = QUIZ_QUESTIONS.length;
+            document.getElementById('category-badge').innerText = q.category;
+            document.getElementById('question-text').innerText = q.question;
+            document.getElementById('correct-answer-banner').classList.add('hidden');
+
+            ['c1', 'c2'].forEach(p => {
+                state.answers[p] = '';
+                state.revealed[p] = false;
+                document.getElementById(`answer-${p}-display`).innerText = "???";
+                document.getElementById(`status-badge-${p}`).innerText = "Waiting...";
+                document.getElementById(`status-badge-${p}`).className = "text-amber-400";
+                const input = document.getElementById(`input-${p}`);
+                if (input) input.value = '';
+                const fb = document.getElementById(`feedback-${p}`);
+                if (fb) fb.innerText = '';
+            });
+
+            resetTimer();
+        }
+
+        function nextQuestion() {
+            if (state.currentQ < QUIZ_QUESTIONS.length - 1) {
+                loadQuestion(state.currentQ + 1);
+            } else {
+                alert("🎉 Quiz Complete!");
+            }
+        }
+
+        function adjustScore(player, amount) {
+            state.scores[player] += amount;
+            document.getElementById(`score-${player}-display`).innerText = state.scores[player];
+            document.getElementById(`${player}-my-score`).innerText = state.scores[player];
+        }
+
+        function resetTimer() {
+            clearInterval(state.timerInterval);
+            state.timer = 20;
+            document.getElementById('timer-display').innerText = state.timer;
+
+            state.timerInterval = setInterval(() => {
+                state.timer--;
+                document.getElementById('timer-display').innerText = state.timer;
+                if (state.timer <= 0) clearInterval(state.timerInterval);
+            }, 1000);
+        }
+
+        function toggleAudio() {
+            state.soundEnabled = !state.soundEnabled;
+            const btn = document.getElementById('btn-sound');
+            btn.innerHTML = state.soundEnabled ? `<i data-lucide="volume-2" class="w-5 h-5"></i>` : `<i data-lucide="volume-x" class="w-5 h-5"></i>`;
+            lucide.createIcons();
+        }
+
+        function initSnowfall() {
+            const canvas = document.getElementById('snow-canvas');
+            const ctx = canvas.getContext('2d');
+            function resize() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            const flakes = Array.from({ length: 50 }, () => ({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 3 + 1,
+                speed: Math.random() * 1 + 0.5
+            }));
+
+            function render() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.beginPath();
+                flakes.forEach(f => {
+                    ctx.moveTo(f.x, f.y);
+                    ctx.arc(f.x, f.y, f.radius, 0, Math.PI * 2);
+                    f.y += f.speed;
+                    if (f.y > canvas.height) f.y = -5;
+                });
+                ctx.fill();
+                requestAnimationFrame(render);
+            }
+            render();
+        }
+    </script>
+</body>
+</html>
